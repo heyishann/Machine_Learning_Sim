@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ML Simulator - Upload Dataset</title>
+</head>
+<body>
+    <h2>Upload a Dataset</h2>
+    <form id="upload-form" enctype="multipart/form-data">
+        <input type="file" name="file" id="file-input">
+        <button type="submit">Upload</button>
+    </form>
+
+    <h3>Dataset Preview:</h3>
+    <table border="1" id="dataset-preview" style="display: none;">
+        <thead id="table-head"></thead>
+        <tbody id="table-body"></tbody>
+    </table>
+
+    <button id="classify-btn" style="display: none;">Run Normal Classification</button>
+
+    <h3>Ensemble Classification</h3>
+    <div id="ensemble-options" style="display: none;">
+        <label>Select Models:</label><br>
+        <input type="checkbox" name="models" value="Decision Tree"> Decision Tree <br>
+        <input type="checkbox" name="models" value="Random Forest"> Random Forest <br>
+        <input type="checkbox" name="models" value="Gradient Boosting"> Gradient Boosting <br>
+        <input type="checkbox" name="models" value="Logistic Regression"> Logistic Regression <br>
+        <input type="checkbox" name="models" value="KNN"> K-Nearest Neighbors <br>
+        <input type="checkbox" name="models" value="Support Vector Machine"> Support Vector Machine <br>
+
+        <h4>Voting Type:</h4>
+        <input type="radio" name="voting" value="hard" checked> Hard Voting <br>
+        <input type="radio" name="voting" value="soft"> Soft Voting <br>
+
+        <button id="ensemble-btn">Run Ensemble Classification</button>
+    </div>
+
+    <h3>Classification Results:</h3>
+    <table border="1" id="results-table" style="display: none;">
+        <thead>
+            <tr>
+                <th>Model</th>
+                <th>Accuracy (%)</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <script>
+        document.getElementById('upload-form').onsubmit = async function(event) {
+            event.preventDefault();
+
+            let fileInput = document.getElementById('file-input');
+            if (!fileInput.files.length) {
+                alert("Please select a file.");
+                return;
+            }
+
+            let formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+
+            let response = await fetch('/upload', {
+                method: "POST",
+                body: formData
+            });
+
+            let result = await response.json();
+            if (result.head) {
+                document.getElementById("dataset-preview").style.display = "block";
+                let tableHead = document.getElementById("table-head");
+                let tableBody = document.getElementById("table-body");
+
+                tableHead.innerHTML = "<tr>" + Object.keys(result.head[0]).map(key => `<th>${key}</th>`).join("") + "</tr>";
+                tableBody.innerHTML = result.head.map(row => "<tr>" + Object.values(row).map(val => `<td>${val}</td>`).join("") + "</tr>").join("");
+
+                // Show Classification Buttons
+                document.getElementById("classify-btn").style.display = "block";
+                document.getElementById("ensemble-options").style.display = "block";
+            }
+        };
+
+        async function runClassification(url, body = {}) {
+            let response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body)
+            });
+
+            let result = await response.json();
+            let table = document.getElementById("results-table");
+            let tbody = table.querySelector("tbody");
+
+            tbody.innerHTML = ""; // Clear previous results
+
+            if (result.results) {
+                result.results.forEach(row => {
+                    let tr = document.createElement("tr");
+                    tr.innerHTML = `<td>${row.Model}</td><td>${row.Accuracy}</td>`;
+                    tbody.appendChild(tr);
+                });
+
+                table.style.display = "block";
+            } else {
+                alert("Error: " + result.error);
+            }
+        }
+
+        document.getElementById('classify-btn').onclick = function() {
+            runClassification('/classify');  // Normal Classification
+        };
+
+        document.getElementById('ensemble-btn').onclick = function() {
+            let selectedModels = Array.from(document.querySelectorAll("input[name='models']:checked")).map(cb => cb.value);
+            let votingType = document.querySelector("input[name='voting']:checked").value;
+
+            if (selectedModels.length === 0) {
+                alert("Please select at least one model for ensemble classification.");
+                return;
+            }
+
+            runClassification('/ensemble_classify', { models: selectedModels, voting: votingType });
+        };
+    </script>
+</body>
+</html>
